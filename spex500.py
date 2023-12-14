@@ -1,12 +1,18 @@
 # encoding: utf-8
-# Controla o monocromador Spex 500 via porta GPIB.
-# revisão 21/06/2023
+
+"""
+     Author: Marcelo Meira Faleiros
+     State University of Campinas, Brazil
+
+     """
 
 import pyvisa as visa
 import time
 
 class Spex500():
     '''
+    Controla o monocromador Spex 500 via porta GPIB ou RS232.
+
     -------------------------------------------------------------------------------------------------------
     Command                  | Host sends                  | Spex Controller sends              
     -------------------------------------------------------------------------------------------------------
@@ -142,14 +148,28 @@ class Spex500():
     def __init__(self):
         self.data = ['Spex', 'model 232', 's/n 0289']        
         
-    def set_up(self):
+    def set_up(self, comm_mode=str):
         self.rm = visa.ResourceManager()
-        self.spex = self.rm.open_resource('GPIB0::2')
+        if comm_mode == 'gpib':
+            self.spex = self.rm.open_resource('GPIB0::2')
+        if comm_mode == 'rs232':
+            self.ser = self.rm.open_resource('ASRL9::INSTR')
+            self.ser.write_termination='\r\n'
+            self.ser.read_termination='\r\n'
+            self.ser.baud_rate = 19200
+            self.ser.data_bits = 8
+            self.ser.parity = visa.constants.Parity.none
+            self.ser.stop_bits = visa.constants.StopBits.one
+            self.ser.flow_control = visa.constants.VI_ASRL_FLOW_XON_XOFF
+            self.ser.timeout = 25000
         
     def identity(self):        
         self.data.append(self.spex.query("z"))                #read MAIN version number
         self.data.append(self.spex.query("y"))                #read BOOT version number
         return self.data    
+    
+    def rs232_start_up(self):
+        pass
  
     def gpib_start_up(self):        
         self.spex.write("222")
