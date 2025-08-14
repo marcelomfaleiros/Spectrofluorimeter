@@ -10,8 +10,6 @@ import os
 from fluorimeter_interface import Ui_MainWindow
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtWidgets as qtw
-import spex500 as sp
-import keithley617_visa as kt
 import numpy as np
 import time
 import keyboard
@@ -19,8 +17,8 @@ import keyboard
 class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
     
     '''
-    Keithley 617
-    Spex500 - step motor controlled by gpib
+    Arduino Nano
+    
     '''
     
     def __init__(self, *args, **kwargs):
