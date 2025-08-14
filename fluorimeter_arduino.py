@@ -18,7 +18,7 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
     
     '''
     Arduino Nano
-    
+
     '''
     
     def __init__(self, *args, **kwargs):
@@ -62,10 +62,7 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
     def inst_startup(self):
         #lamp voltage source startup
         
-        #Keithley gpib startup
-        self.keithley = kt.Keithley617()
-        self.keithley.gpib_setup()
-        self.keithley.start_up_auto_config('Amperemeter')
+        #electronic startup        
         
         #excitation monochromator startup
         '''exc_mono = tja.ThermoJarrellAsh(34575)
@@ -74,11 +71,9 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
         exc_mono.calibration(self.strt_exc_wl, self.strt_exc_wl)
         '''
         #emission monochromator startup
-        self.emi_mono = sp.Spex500()
-        self.emi_mono.set_up()
-        self.emi_mono.gpib_start_up()
+        '''self.emi_mono =         
         strt_emi_wl = float(self.strt_algn_emi_wl_lineEdit.text())
-        self.emi_mono.calibration(strt_emi_wl)
+        '''
 
     def graph_start(self):
         self.clear()
