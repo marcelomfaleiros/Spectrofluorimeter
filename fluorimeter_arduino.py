@@ -57,23 +57,15 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
     def wl_calibration(self):
         #excitation wavelength
         #emission wavelength
-        self.emi_mono.calibration()
+        pass
         
     def inst_startup(self):
-        #lamp voltage source startup
-        
-        #electronic startup        
-        
+        #lamp voltage source startup        
+        #electronic startup    
         #excitation monochromator startup
-        '''exc_mono = tja.ThermoJarrellAsh(34575)
-        exc_mono.setup_step_motor()
-        self.strt_exc_wl = float(self.strt_algn_exc_wl_lineEdit.text())
-        exc_mono.calibration(self.strt_exc_wl, self.strt_exc_wl)
-        '''
         #emission monochromator startup
-        '''self.emi_mono =         
-        strt_emi_wl = float(self.strt_algn_emi_wl_lineEdit.text())
-        '''
+        pass
+        
 
     def graph_start(self):
         self.clear()
@@ -102,7 +94,7 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
         
         #3 - emission wavelength
         self.algn_emi_target = float(self.strt_algn_emi_wl_lineEdit.text())
-        self.emi_mono.run(self.algn_emi_target)
+        #serial arduino command to send monochromator to target
 
         #4 - acquire data from Keithley
         t = 0
