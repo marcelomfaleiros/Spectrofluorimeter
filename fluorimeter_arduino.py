@@ -7,14 +7,15 @@
 
 import sys
 import os
-from fluorimeter_interface import Ui_MainWindow
+from PyQt5 import QtWidgets, uic
+#from fluorimeter_interface import Ui_MainWindow
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtWidgets as qtw
+#from pyqtgraph.Qt import QtWidgets as qtw
 import numpy as np
 import time
 import keyboard
 
-class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
+class Spectrofluorimeter(QtWidgets.QMainWindow):
     
     '''
     Arduino Nano
@@ -24,8 +25,7 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.setObjectName("Spectrofluorimeter")
-        self.setupUi(self)
+        uic.loadUi('fluorimeter_interface.ui', self)
 
         self.strt_algn_exc_wl_lineEdit.setText("300")
         self.strt_algn_emi_wl_lineEdit.setText("200")        
@@ -155,7 +155,7 @@ class Spectrofluorimeter(qtw.QMainWindow, Ui_MainWindow):
         self.close()
         
 if __name__ == '__main__':
-    app = qtw.QApplication([])
+    app = QtWidgets.QApplication([])
     tela = Spectrofluorimeter()
     tela.show()
     app.exec_()
