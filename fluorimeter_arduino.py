@@ -5,15 +5,13 @@
     State University of Campinas, Brazil
 """
 
-import sys
-import os
+import serial
 from PyQt5 import QtWidgets, uic
-#from fluorimeter_interface import Ui_MainWindow
 import pyqtgraph as pg
 #from pyqtgraph.Qt import QtWidgets as qtw
 import numpy as np
-import time
 import keyboard
+import time
 
 class Spectrofluorimeter(QtWidgets.QMainWindow):
     
@@ -27,16 +25,18 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
 
         uic.loadUi('fluorimeter_interface.ui', self)
 
-        self.strt_algn_exc_wl_lineEdit.setText("300")
-        self.strt_algn_emi_wl_lineEdit.setText("200")        
+        self.algn_exc_wl_lineEdit.setText("300")
+        self.algn_emi_wl_lineEdit.setText("200")        
         self.wl_ini_em_lineEdit.setText("400")
         self.wl_fin_em_lineEdit.setText("700")
-        self.wl_stp_em_lineEdit.setText("2")
+        self.wl_stp_em_lineEdit.setText("1")
         self.wl_exc_em_lineEdit.setText("300")
         self.wl_ini_ex_lineEdit.setText("200")
         self.wl_fin_ex_lineEdit.setText("400")
         self.wl_stp_ex_lineEdit.setText("2")
         self.wl_emi_ex_lineEdit.setText("550")
+        self.spex_display_lineEdit.setText("400")
+        self.target_wavelength_lineEdit.setText("410")
                 
         self.startup_pushButton.clicked.connect(self.inst_startup)
         self.align_pushButton.clicked.connect(self.sample_alignment)
@@ -48,6 +48,8 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.ex_save_pushButton.clicked.connect(self.save)
         self.em_exit_pushButton.clicked.connect(self.exit)
         self.ex_exit_pushButton.clicked.connect(self.exit)
+        self.move_pushButton.clicked.connect(self.mono_control)
+        self.startup_pushButton.clicked.connect(self.inst_startup)
 
     def save(self):
         self.data = self.data.transpose()          
@@ -55,17 +57,28 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         np.savetxt(file_data, self.data)
 
     def wl_calibration(self):
-        #excitation wavelength
-        #emission wavelength
         pass
+
+    def mono_control(self):
+        target = float(self.target_wavelength_lineEdit.text())
+        steps = round((target - self.spex_display) * 500)
+
+        command = f'{steps}\r\n'
+        self.arduino.write(command.encode())
+
+        self.spex_display = float(self.target_wavelength_lineEdit.text())
+
         
     def inst_startup(self):
-        #lamp voltage source startup        
-        #electronic startup    
-        #excitation monochromator startup
-        #emission monochromator startup
-        pass
-        
+        self.arduino = serial.Serial(timeout=10)
+        self.arduino.port = 'COM4'		
+        self.arduino.baudrate = 9600
+        self.arduino.open()  
+        time.sleep(2)
+
+        #calibrate spex
+        self.spex_display = float(self.spex_display_lineEdit.text())
+        time.sleep(0.1)
 
     def graph_start(self):
         self.clear()
@@ -96,13 +109,13 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.algn_emi_target = float(self.strt_algn_emi_wl_lineEdit.text())
         #serial arduino command to send monochromator to target
 
-        #4 - acquire data from Keithley
+        #4 - acquire data from electronics
         t = 0
         while True:
             if keyboard.is_pressed('Escape'):
                 break            
-            y = self.keithley.run()
-            y = -1*y
+            #y = self.keithley.run()
+            #y = -1*y
             self.wl_array = np.append(self.wl_array, t)
             self.pl_array = np.append(self.pl_array, y)
             self.dataset.setData(self.wl_array, self.pl_array, pen=None, symbol='x')
@@ -153,6 +166,7 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         
     def exit(self):
         self.close()
+        self.arduino.close()
         
 if __name__ == '__main__':
     app = QtWidgets.QApplication([])
