@@ -105,14 +105,14 @@ border-color: rgb(0, 0, 0);</string>
           <enum>QTabWidget::Triangular</enum>
          </property>
          <property name="currentIndex">
-          <number>2</number>
+          <number>1</number>
          </property>
          <property name="movable">
           <bool>false</bool>
          </property>
          <widget class="QWidget" name="tab">
           <attribute name="title">
-           <string>Start / Align</string>
+           <string>Calibrate / Align</string>
           </attribute>
           <layout class="QGridLayout" name="gridLayout_2">
            <item row="0" column="0">
