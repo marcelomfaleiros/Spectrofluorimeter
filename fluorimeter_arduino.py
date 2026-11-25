@@ -4,7 +4,7 @@
     Author: Marcelo Meira Faleiros
     State University of Campinas, Brazil
 
-    Revision - 23/11/26
+    Revision - 25/11/26
 """
 
 import serial
@@ -14,6 +14,7 @@ import pyqtgraph as pg
 import numpy as np
 import keyboard
 import time
+import random
 
 class Toast(QtWidgets.QWidget):
     def __init__(self, parent=None, texto="", timeout=3000):
@@ -116,7 +117,7 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.ex_save_pushButton.clicked.connect(self.save)
         self.em_exit_pushButton.clicked.connect(self.exit)
         self.ex_exit_pushButton.clicked.connect(self.exit)
-        self.move_pushButton.clicked.connect(self.mono_control)
+        self.move_pushButton.clicked.connect(lambda: self.mono_control(float(self.target_wavelength_lineEdit.text())))
         self.startup_pushButton.clicked.connect(self.inst_startup)
         self.calibrate_pushButton.clicked.connect(self.wl_calibrate)
 
@@ -141,17 +142,6 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
     def wl_calibrate(self):
         self.spex_display = self.calibrate_wavelength_lineEdit.text()
 
-    def mono_control(self):
-        target = float(self.target_wavelength_lineEdit.text())
-
-        steps = round((target - self.spex_display) * self.steps_per_nm)
-
-        if steps != 0:
-            command = f'{steps}\r\n'
-            self.arduino.write(command.encode())
-
-        self.spex_display = target
-        
     def inst_startup(self):      
         self.arduino = serial.Serial(timeout=10)
         self.arduino.port = 'COM4'
@@ -176,7 +166,7 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.graphicsView.setLabel("left", "PMT current", units="A")
         self.graphicsView.setLabel("bottom", "Wavelength", units="nm")
 
-        self.dataset = self.graphicsView.plot(self.wl_array, self.pl_array)
+        self.dataset = self.graphicsView.plot(self.wl_array, self.pl_array)        
         
     def sample_alignment(self):
         #1 - graph startup
@@ -209,6 +199,28 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
 
             t += 1
 
+    def motor_busy(self, timeout=15.0):
+        inicio = time.monotonic()
+
+        while time.monotonic() - inicio < timeout:
+            if self.arduino.in_waiting:
+                resposta = self.arduino.readline().decode().strip()
+                if resposta == "DONE":
+                    return True
+            time.sleep(0.01)
+
+        raise TimeoutError("Arduino não confirmou a conclusão do movimento.")
+
+    def mono_control(self, target):     
+        steps = round((target - self.spex_display) * self.steps_per_nm)      
+
+        if steps != 0:
+            command = f'{steps}\r\n'
+            self.arduino.write(command.encode())  
+            self.motor_busy()   
+    
+        self.spex_display = target  
+
     def emission_spectrum(self):
         self.graph_start()        
         
@@ -216,15 +228,17 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.fin_emi_wl = float(self.wl_fin_em_lineEdit.text())
         self.stp_emi_wl = float(self.wl_stp_em_lineEdit.text())
 
+        step_time = self.stp_emi_wl*0.5
+
         x = self.ini_emi_wl
         y = 0
         
         while x <= self.fin_emi_wl:
             if keyboard.is_pressed('Escape'):
                 break
-            self.emi_mono.run(x)    
-            y = self.keithley.run()
-            y = -1*y
+            self.mono_control(x) 
+            y = random.randint(1, 100)
+            time.sleep(2)
             self.pl_array = np.append(self.pl_array, y)
             self.wl_array = np.append(self.wl_array, x)
             self.dataset.setData(self.wl_array, self.pl_array, pen=None, symbol='o')
