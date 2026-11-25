@@ -3,15 +3,78 @@
 """
     Author: Marcelo Meira Faleiros
     State University of Campinas, Brazil
+
+    Revision - 23/11/26
 """
 
 import serial
-from PyQt5 import QtWidgets, uic
+import serial.tools.list_ports
+from PyQt5 import QtWidgets, QtCore, uic
 import pyqtgraph as pg
-#from pyqtgraph.Qt import QtWidgets as qtw
 import numpy as np
 import keyboard
 import time
+
+class Toast(QtWidgets.QWidget):
+    def __init__(self, parent=None, texto="", timeout=3000):
+        super().__init__(parent)
+
+        self.setWindowFlags(
+            QtCore.Qt.ToolTip | QtCore.Qt.FramelessWindowHint
+        )
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        label = QtWidgets.QLabel(texto)
+        label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 14px;
+            }
+        """)
+
+        container = QtWidgets.QFrame()
+        container.setStyleSheet("""
+            QFrame {
+                background-color: rgba(30, 30, 30, 220);
+                border-radius: 10px;
+                padding: 10px;
+            }
+        """)
+        c_layout = QtWidgets.QVBoxLayout(container)
+        c_layout.addWidget(label)
+
+        layout.addWidget(container)
+
+        self.adjustSize()
+        self.opacity = QtWidgets.QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity)
+
+        self.anim = QtCore.QPropertyAnimation(self.opacity, b"opacity")
+        self.anim.setDuration(500)
+        self.anim.setStartValue(0)
+        self.anim.setEndValue(1)
+
+        self.anim.start()
+
+        QtCore.QTimer.singleShot(timeout, self.fade_out)
+
+    def show_(self):
+        if self.parent():
+            geo = self.parent().geometry()
+            x = geo.x() + geo.width() - self.width() - 200
+            y = geo.y() + geo.height() - self.height() - 150
+            self.move(x, y)
+
+        self.show()
+
+    def fade_out(self):
+        self.anim = QtCore.QPropertyAnimation(self.opacity, b"opacity")
+        self.anim.setDuration(500)
+        self.anim.setStartValue(1)
+        self.anim.setEndValue(0)
+        self.anim.finished.connect(self.close)
+        self.anim.start()
 
 class Spectrofluorimeter(QtWidgets.QMainWindow):
     
@@ -25,8 +88,12 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
 
         uic.loadUi('fluorimeter_interface.ui', self)
 
+        self.steps_per_nm = 500
+
+        self.listar_portas()
+
         self.algn_exc_wl_lineEdit.setText("300")
-        self.algn_emi_wl_lineEdit.setText("200")        
+        self.algn_emi_wl_lineEdit.setText("400")        
         self.wl_ini_em_lineEdit.setText("400")
         self.wl_fin_em_lineEdit.setText("700")
         self.wl_stp_em_lineEdit.setText("1")
@@ -37,6 +104,7 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.wl_emi_ex_lineEdit.setText("550")
         self.spex_display_lineEdit.setText("400")
         self.target_wavelength_lineEdit.setText("410")
+        self.calibrate_wavelength_lineEdit.setText("410")
                 
         self.startup_pushButton.clicked.connect(self.inst_startup)
         self.align_pushButton.clicked.connect(self.sample_alignment)
@@ -50,36 +118,54 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.ex_exit_pushButton.clicked.connect(self.exit)
         self.move_pushButton.clicked.connect(self.mono_control)
         self.startup_pushButton.clicked.connect(self.inst_startup)
+        self.calibrate_pushButton.clicked.connect(self.wl_calibrate)
+
+    def toast(self, texto, timeout=3000):
+        self._toast = Toast(self, texto, timeout)
+        self._toast.show_()
+
+    def listar_portas(self):
+
+        self.comboBox.clear()
+
+        portas = serial.tools.list_ports.comports()
+
+        for porta in portas:
+            self.comboBox.addItem(porta.device)
 
     def save(self):
         self.data = self.data.transpose()          
         file_data = qtw.QFileDialog.getSaveFileName()[0]
         np.savetxt(file_data, self.data)
 
-    def wl_calibration(self):
-        pass
+    def wl_calibrate(self):
+        self.spex_display = self.calibrate_wavelength_lineEdit.text()
 
     def mono_control(self):
         target = float(self.target_wavelength_lineEdit.text())
-        steps = round((target - self.spex_display) * 500)
 
-        command = f'{steps}\r\n'
-        self.arduino.write(command.encode())
+        steps = round((target - self.spex_display) * self.steps_per_nm)
 
-        self.spex_display = float(self.target_wavelength_lineEdit.text())
+        if steps != 0:
+            command = f'{steps}\r\n'
+            self.arduino.write(command.encode())
 
+        self.spex_display = target
         
-    def inst_startup(self):
+    def inst_startup(self):      
         self.arduino = serial.Serial(timeout=10)
-        self.arduino.port = 'COM4'		
+        self.arduino.port = 'COM4'
         self.arduino.baudrate = 9600
-        self.arduino.open()  
-        time.sleep(2)
+        self.arduino.open()
 
-        #calibrate spex
+        # Aguarda inicialização do Arduino
+        self.toast("Aguarde: arduino inicializando", 2000)
+
+        porta = self.comboBox.currentText()
+
+        # Calibração inicial do espectrômetro
         self.spex_display = float(self.spex_display_lineEdit.text())
-        time.sleep(0.1)
-
+        
     def graph_start(self):
         self.clear()
         
@@ -166,7 +252,6 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         
     def exit(self):
         self.close()
-        self.arduino.close()
         
 if __name__ == '__main__':
     app = QtWidgets.QApplication([])
