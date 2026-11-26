@@ -4,7 +4,7 @@
     Author: Marcelo Meira Faleiros
     State University of Campinas, Brazil
 
-    Revision - 25/11/26
+    Revision - 26/11/26
 """
 
 import serial
@@ -30,7 +30,7 @@ class Toast(QtWidgets.QWidget):
         label.setStyleSheet("""
             QLabel {
                 color: white;
-                font-size: 14px;
+                font-size: 20px;
             }
         """)
 
@@ -117,7 +117,7 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.ex_save_pushButton.clicked.connect(self.save)
         self.em_exit_pushButton.clicked.connect(self.exit)
         self.ex_exit_pushButton.clicked.connect(self.exit)
-        self.move_pushButton.clicked.connect(lambda: self.mono_control(float(self.target_wavelength_lineEdit.text())))
+        self.move_pushButton.clicked.connect(self.move_to_target)
         self.startup_pushButton.clicked.connect(self.inst_startup)
         self.calibrate_pushButton.clicked.connect(self.wl_calibrate)
 
@@ -142,10 +142,12 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
     def wl_calibrate(self):
         self.spex_display = self.calibrate_wavelength_lineEdit.text()
 
-    def inst_startup(self):      
-        self.arduino = serial.Serial(timeout=10)
-        self.arduino.port = 'COM4'
+    def inst_startup(self): 
+        comm_port = self.comboBox.currentText()     
+        self.arduino = serial.Serial()
+        self.arduino.port = comm_port
         self.arduino.baudrate = 9600
+        self.timeout = 0.1
         self.arduino.open()
 
         # Aguarda inicialização do Arduino
@@ -204,22 +206,37 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
 
         while time.monotonic() - inicio < timeout:
             if self.arduino.in_waiting:
-                resposta = self.arduino.readline().decode().strip()
-                if resposta == "DONE":
-                    return True
-            time.sleep(0.01)
+                resposta = self.arduino.readline().decode(
+                "utf-8", errors="ignore"    
+                ).strip()
+
+                if resposta:
+                    print(f"Arduino: {resposta}")  # diagnóstico
+
+                    if resposta == "DONE":
+                        return True
 
         raise TimeoutError("Arduino não confirmou a conclusão do movimento.")
 
-    def mono_control(self, target):     
-        steps = round((target - self.spex_display) * self.steps_per_nm)      
+    def mono_control(self, target):           
+        steps = round((target - self.spex_display) * self.steps_per_nm)
+
+        timeout = 5 + (abs(steps) + (2000 if steps < 0 else 0)) * 0.005      
 
         if steps != 0:
             command = f'{steps}\r\n'
             self.arduino.write(command.encode())  
-            self.motor_busy()   
+            self.motor_busy(timeout)   
     
         self.spex_display = target  
+
+    def move_to_target(self):
+        try:
+            wavelength = float(self.target_wavelength_lineEdit.text())
+            self.mono_control(wavelength)
+
+        except ValueError:
+            print("Comprimento de onda inválido.")
 
     def emission_spectrum(self):
         self.graph_start()        
@@ -227,8 +244,6 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         self.ini_emi_wl = float(self.wl_ini_em_lineEdit.text())
         self.fin_emi_wl = float(self.wl_fin_em_lineEdit.text())
         self.stp_emi_wl = float(self.wl_stp_em_lineEdit.text())
-
-        step_time = self.stp_emi_wl*0.5
 
         x = self.ini_emi_wl
         y = 0
