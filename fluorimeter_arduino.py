@@ -14,7 +14,6 @@ import pyqtgraph as pg
 import numpy as np
 import keyboard
 import time
-import random
 
 class Toast(QtWidgets.QWidget):
     def __init__(self, parent=None, texto="", timeout=3000):
@@ -90,6 +89,8 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         uic.loadUi('fluorimeter_interface.ui', self)
 
         self.steps_per_nm = 500
+        self.backlash_steps = 400   # Compensação de backlash (ajustável)
+        self.last_direction = 0    # 0: indefinido; +1: avanço; -1: retorno
 
         self.listar_portas()
 
@@ -136,7 +137,7 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
 
     def save(self):
         self.data = self.data.transpose()          
-        file_data = qtw.QFileDialog.getSaveFileName()[0]
+        file_data = QtWidgets.QFileDialog.getSaveFileName()[0]
         np.savetxt(file_data, self.data)
 
     def wl_calibrate(self):
@@ -215,20 +216,38 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
 
                     if resposta == "DONE":
                         return True
+                    elif resposta == "LIMIT":
+                        print("Fim de curso atingido")
+                    elif resposta == "ZERO":
+                        print("Motor desenergizado")
 
         raise TimeoutError("Arduino não confirmou a conclusão do movimento.")
 
-    def mono_control(self, target):           
+    def mono_control(self, target):
+
         steps = round((target - self.spex_display) * self.steps_per_nm)
 
-        timeout = 5 + (abs(steps) + (2000 if steps < 0 else 0)) * 0.005      
+        if steps == 0:
+            return
 
-        if steps != 0:
-            command = f'{steps}\r\n'
-            self.arduino.write(command.encode())  
-            self.motor_busy(timeout)   
-    
-        self.spex_display = target  
+        direction = 1 if steps > 0 else -1
+        invert = self.last_direction != 0 and direction != self.last_direction
+
+        if invert:
+            # Ultrapassa o alvo para compensar a folga
+            self.arduino.write(f'{steps + direction*self.backlash_steps}\r\n'.encode())
+            self.motor_busy(5 + abs(steps + direction*self.backlash_steps)*0.005)
+
+            # Retorna ao alvo pela direção desejada
+            self.arduino.write(f'{-direction*self.backlash_steps}\r\n'.encode())
+            self.motor_busy(5 + self.backlash_steps*0.005)
+
+        else:
+            self.arduino.write(f'{steps}\r\n'.encode())
+            self.motor_busy(5 + abs(steps)*0.005)
+
+        self.last_direction = direction
+        self.spex_display = target
 
     def move_to_target(self):
         try:
@@ -238,12 +257,20 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
         except ValueError:
             print("Comprimento de onda inválido.")
 
+    def gaussian(self, x, A=1, mu=0, sigma=1):
+        return A * np.exp(-((np.array(x) - mu)**2) / (2 * sigma**2))
+
     def emission_spectrum(self):
         self.graph_start()        
         
         self.ini_emi_wl = float(self.wl_ini_em_lineEdit.text())
         self.fin_emi_wl = float(self.wl_fin_em_lineEdit.text())
         self.stp_emi_wl = float(self.wl_stp_em_lineEdit.text())
+
+        mu_gaussiana = (self.fin_emi_wl + self.ini_emi_wl)/2
+
+        x_array = np.arange(self.ini_emi_wl, (self.fin_emi_wl+self.stp_emi_wl), self.stp_emi_wl)
+        y_array = self.gaussian(x_array, A=(self.fin_emi_wl+self.stp_emi_wl), mu=mu_gaussiana, sigma=20)
 
         x = self.ini_emi_wl
         y = 0
@@ -252,8 +279,8 @@ class Spectrofluorimeter(QtWidgets.QMainWindow):
             if keyboard.is_pressed('Escape'):
                 break
             self.mono_control(x) 
-            y = random.randint(1, 100)
-            time.sleep(2)
+            time.sleep(1)
+            y = y_array[np.argmin(np.abs(x_array - x))]
             self.pl_array = np.append(self.pl_array, y)
             self.wl_array = np.append(self.wl_array, x)
             self.dataset.setData(self.wl_array, self.pl_array, pen=None, symbol='o')
